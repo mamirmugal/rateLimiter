@@ -1,5 +1,4 @@
-import { convertToMs, nextTime, prevTime } from "../src/utils/helper";
-
+import { convertToMs, nextTime, prevTime } from '../src/utils';
 
 describe('Time Utility Functions', () => {
   describe('convertToMs', () => {

@@ -1,30 +1,22 @@
-import express, { Application } from "express";
-import { defaultConfig } from "./config/config";
-import { RateLimiter } from "./middleware/rateLimiter";
-import { RedisClient } from "./utils/redisClient";
-import pino from "pino";
+import { defaultConfig, PORT, REDIT_URI } from './config';
+import express, { Application } from 'express';
+import { RateLimiter } from './middleware';
+import { RedisClient } from './utils';
+import router from './routers';
+import pino from 'pino';
 
 const app: Application = express();
 const logger = pino();
-const port = 3002;
+const port = PORT || 3002;
 
-const redisClient = new RedisClient(
-  "redis://localhost:6379",
-  defaultConfig.SlidingLog.windowSize,
-  defaultConfig.SlidingLog.maxRequests
-);
+// getting Rate limiter
+const rateLimiter = new RateLimiter(new RedisClient(REDIT_URI), defaultConfig);
 
-const rateLimiter = new RateLimiter(redisClient, defaultConfig);
-
+// middleware
 app.use(rateLimiter.middleware);
 
-app.get("/", (req, res) => {
-  res.send("Public");
-});
-
-app.get("/sale", (req, res) => {
-  res.send("Sale!!!");
-});
+// router
+app.use(router);
 
 app.listen(port, () => {
   logger.info(`Example app listening on port ${port}`);

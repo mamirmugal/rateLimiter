@@ -1,88 +1,106 @@
-import request from "supertest";
-import express from "express";
-import { RedisClient } from "../src/utils/redisClient";
-import { RateLimiter } from "../src/middleware/rateLimiter";
-import { RateLimitConfigInterface } from "../src/types/types";
-import { convertToMs, nextTime, prevTime } from "../src/utils/helper";
+import express from 'express';
+import request from 'supertest';
+import { RateLimiter } from '../src/middleware';
+import { RedisClient, convertToMs } from '../src/utils';
+import { RateLimitConfigInterface } from '../src/types';
 
-jest.mock("../src/utils/redisClient");
+jest.mock('../src/utils/redisClient');
 
-describe("RateLimiter", () => {
+describe('RateLimiter Middleware', () => {
   let app: express.Application;
+  let rateLimiter: RateLimiter;
   let mockRedisClient: jest.Mocked<RedisClient>;
-  let config: RateLimitConfigInterface;
+  let mockConfig: RateLimitConfigInterface;
 
   beforeEach(() => {
-    mockRedisClient = new RedisClient("", 0, 0) as jest.Mocked<RedisClient>;
-    config = {
-      ttl: convertToMs(1, "min"),
-      unauthLimit: 10,
-      authLimit: 20,
-      SlidingLog: {
-        maxRequests: 2,
-        windowSize: 5000,
+    app = express();
+    mockRedisClient = new RedisClient('') as jest.Mocked<RedisClient>;
+    mockConfig = {
+      ttl: 3000,
+      unauthLimit: {
+        limit: 10,
+        slidingLog: {
+          windowSize: convertToMs(1, 'min'),
+          maxRequests: 5,
+        },
+      },
+      authLimit: {
+        limit: 20,
+        slidingLog: {
+          windowSize: convertToMs(1, 'min'),
+          maxRequests: 5,
+        },
       },
       override: [
         {
-          url: "/sale",
-          startTime: prevTime(1),
-          endTime: nextTime(1),
-          rateLimit: 12, // Increased limit during the sale
+          url: '/special',
+          startTime: new Date(Date.now() - 3600000), // 1 hour ago
+          endTime: new Date(Date.now() + 3600000), // 1 hour from now
+          rateLimit: {
+            limit: 5,
+            slidingLog: {
+              windowSize: convertToMs(1, 'min'),
+              maxRequests: 5,
+            },
+          },
         },
       ],
     };
+    rateLimiter = new RateLimiter(mockRedisClient, mockConfig);
 
-    app = express();
-    const rateLimiter = new RateLimiter(mockRedisClient, config);
     app.use(rateLimiter.middleware);
-    app.get("/", (req, res) => res.sendStatus(200));
+    app.get('/test', (req, res) => res.sendStatus(200));
+    app.get('/special', (req, res) => res.sendStatus(200));
   });
 
-  it("should allow requests within the limit", async () => {
-    mockRedisClient.incrAndExpire.mockResolvedValue([10, 1800000]);
+  test('Should allow requests within rate limit', async () => {
+    mockRedisClient.incrExpireCalcSlidingLog.mockResolvedValue({ isNotAllowed: false, requests: 5, ttl: 3000 });
 
-    const response = await request(app).get("/");
-    expect(response.status).toBe(200);
-    expect(response.header["x-ratelimit-limit"]).toBe("10");
-    expect(response.header["x-ratelimit-remaining"]).toBe("0");
-  });
-
-  it("should block requests exceeding the limit", async () => {
-    mockRedisClient.incrAndExpire.mockResolvedValue([11, 1800000]);
-
-    const response = await request(app).get("/");
-    expect(response.status).toBe(429);
-    expect(response.body.error).toBe("Too Many Requests");
-  });
-
-  it("should apply different limits for authenticated users", async () => {
-    mockRedisClient.incrAndExpire.mockResolvedValue([15, 1800000]);
-
-    const response = await request(app)
-      .get("/")
-      .set("Authorization", "Bearer token");
-    expect(response.status).toBe(200);
-    expect(response.header["x-ratelimit-limit"]).toBe("20");
-    expect(response.header["x-ratelimit-remaining"]).toBe("5");
-  });
-
-  it("sliding log is allowed", async () => {
-    mockRedisClient.incrAndExpire.mockResolvedValue([10, 1800000]);
-    mockRedisClient.isNotAllowed.mockResolvedValue(false);
-
-    const response = await request(app).get("/");
+    const response = await request(app).get('/test');
 
     expect(response.status).toBe(200);
-
+    expect(response.headers['x-ratelimit-limit']).toBe('10');
+    expect(response.headers['x-ratelimit-remaining']).toBe('5');
+    expect(response.headers['x-ratelimit-reset']).toBeDefined();
   });
 
-  it("sliding log is not allowed", async () => {
-    mockRedisClient.incrAndExpire.mockResolvedValue([10, 1800000]);
-    mockRedisClient.isNotAllowed.mockResolvedValue(true);
+  test('Should block requests exceeding rate limit', async () => {
+    mockRedisClient.incrExpireCalcSlidingLog.mockResolvedValue({ isNotAllowed: true, requests: 11, ttl: 3000 });
 
-    const response = await request(app).get("/");
+    const response = await request(app).get('/test');
 
     expect(response.status).toBe(429);
-    expect(response.body.error).toBe("Too Many Requests");
+    expect(response.body).toEqual({
+      error: 'Too Many Requests',
+      retryAfter: 3,
+    });
+  });
+
+  test('Should apply different limit for authenticated requests', async () => {
+    mockRedisClient.incrExpireCalcSlidingLog.mockResolvedValue({ isNotAllowed: false, requests: 15, ttl: 3000 });
+
+    const response = await request(app).get('/test').set('Authorization', 'Bearer token');
+
+    expect(response.status).toBe(200);
+    expect(response.headers['x-ratelimit-limit']).toBe('20');
+    expect(response.headers['x-ratelimit-remaining']).toBe('5');
+  });
+
+  test('Should apply override limit for special route', async () => {
+    mockRedisClient.incrExpireCalcSlidingLog.mockResolvedValue({ isNotAllowed: false, requests: 3, ttl: 3000 });
+
+    const response = await request(app).get('/special');
+
+    expect(response.status).toBe(200);
+    expect(response.headers['x-ratelimit-limit']).toBe('5');
+    expect(response.headers['x-ratelimit-remaining']).toBe('2');
+  });
+
+  test('Should handle errors gracefully', async () => {
+    mockRedisClient.incrExpireCalcSlidingLog.mockRejectedValue(new Error('Redis error'));
+
+    const response = await request(app).get('/test');
+
+    expect(response.status).toBe(500);
   });
 });

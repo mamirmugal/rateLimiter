@@ -1,93 +1,130 @@
-import { Request } from "express";
-import { RedisClient } from "../src/utils/redisClient"; 
-import { RateLimitConfigInterface } from "../src/types/types";
-import { RateLimiter } from "../src/middleware/rateLimiter";
+import { Request } from 'express';
+import { RateLimiter } from '../src/middleware';
+import { RedisClient, convertToMs } from '../src/utils';
+import { RateLimitConfigInterface } from '../src/types';
 
-jest.mock("../src/utils/redisClient");
+// Mock RedisClient
+jest.mock('../src/utils/redisClient');
 
-describe("RateLimiter", () => {
+describe('RateLimiter', () => {
   let rateLimiter: RateLimiter;
   let mockRedisClient: jest.Mocked<RedisClient>;
   let mockConfig: RateLimitConfigInterface;
 
   beforeEach(() => {
-    mockRedisClient = new RedisClient("", 0, 0) as jest.Mocked<RedisClient>;
+    mockRedisClient = new RedisClient('') as jest.Mocked<RedisClient>;
     mockConfig = {
-      unauthLimit: 10,
-      authLimit: 20,
       ttl: 3600,
-      SlidingLog: {
-        maxRequests: 2,
-        windowSize: 5000,
+      unauthLimit: {
+        limit: 10,
+        slidingLog: {
+          windowSize: convertToMs(1, 'min'),
+          maxRequests: 5,
+        },
+      },
+      authLimit: {
+        limit: 20,
+        slidingLog: {
+          windowSize: convertToMs(1, 'min'),
+          maxRequests: 5,
+        },
       },
       override: [
         {
-          url: "/special",
+          url: '/special',
           startTime: new Date(Date.now() - 3600000), // 1 hour ago
           endTime: new Date(Date.now() + 3600000), // 1 hour from now
-          rateLimit: 30,
+          rateLimit: {
+            limit: 5,
+            slidingLog: {
+              windowSize: convertToMs(1, 'min'),
+              maxRequests: 5,
+            },
+          },
         },
       ],
     };
     rateLimiter = new RateLimiter(mockRedisClient, mockConfig);
   });
 
-  describe("calculateLimit", () => {
-    it("should return correct limit for unauthenticated user", () => {
-      const req = {
-        ip: "127.0.0.1",
-        path: "/test",
-        headers: {},
-      } as unknown as Request;
+  const createMockRequest = (path: string, ip: string, isAuthenticated: boolean): Partial<Request> => ({
+    path,
+    ip,
+    headers: isAuthenticated ? { authorization: 'Bearer token' } : {},
+  });
 
-      const [key, limit] = rateLimiter.calculateLimit(req);
+  test('calculateLimit for unauthenticated user', async () => {
+    const mockRequest = createMockRequest('/api', '127.0.0.1', false);
+    mockRedisClient.incrExpireCalcSlidingLog.mockResolvedValue({ isNotAllowed: false, requests: 5, ttl: 3000 });
 
-      expect(key).toBe("limit:127.0.0.1:/test:false");
-      expect(limit).toBe(10); // unauthLimit
+    const result = await rateLimiter.calculateLimit(mockRequest as Request);
+
+    expect(result).toEqual({
+      tooManyRequests: false,
+      retryAfter: 3,
+      ratelimit: 10,
+      remainingRequests: 5,
+      resetTime: expect.any(Number),
     });
+  });
 
-    it("should return correct limit for authenticated user", () => {
-      const req = {
-        ip: "127.0.0.1",
-        path: "/test",
-        headers: {
-          authorization: "Bearer token",
-        },
-      } as unknown as Request;
+  test('calculateLimit for authenticated user', async () => {
+    const mockRequest = createMockRequest('/api', '127.0.0.1', true);
+    mockRedisClient.incrExpireCalcSlidingLog.mockResolvedValue({ isNotAllowed: false, requests: 15, ttl: 3000 });
 
-      const [key, limit] = rateLimiter.calculateLimit(req);
+    const result = await rateLimiter.calculateLimit(mockRequest as Request);
 
-      expect(key).toBe("limit:127.0.0.1:/test:true");
-      expect(limit).toBe(20); // authLimit
+    expect(result).toEqual({
+      tooManyRequests: false,
+      retryAfter: 3,
+      ratelimit: 20,
+      remainingRequests: 5,
+      resetTime: expect.any(Number),
     });
+  });
 
-    it("should return override limit for special endpoint", () => {
-      const req = {
-        ip: "127.0.0.1",
-        path: "/special",
-        headers: {},
-      } as unknown as Request;
+  test('calculateLimit for override event', async () => {
+    const mockRequest = createMockRequest('/special', '127.0.0.1', false);
+    mockRedisClient.incrExpireCalcSlidingLog.mockResolvedValue({ isNotAllowed: false, requests: 3, ttl: 3000 });
 
-      const [key, limit] = rateLimiter.calculateLimit(req);
+    const result = await rateLimiter.calculateLimit(mockRequest as Request);
 
-      expect(key).toBe("limit:127.0.0.1:/special:false");
-      expect(limit).toBe(30); // overrideLimit
+    expect(result).toEqual({
+      tooManyRequests: false,
+      retryAfter: 3,
+      ratelimit: 5,
+      remainingRequests: 2,
+      resetTime: expect.any(Number),
     });
+  });
 
-    it("should not apply override limit for expired event", () => {
-      mockConfig.override[0].endTime = new Date(Date.now() - 3600000); // 1 hour ago
-      rateLimiter = new RateLimiter(mockRedisClient, mockConfig);
+  test('calculateLimit when too many requests', async () => {
+    const mockRequest = createMockRequest('/api', '127.0.0.1', false);
+    mockRedisClient.incrExpireCalcSlidingLog.mockResolvedValue({ isNotAllowed: true, requests: 11, ttl: 3000 });
 
-      const req = {
-        ip: "127.0.0.1",
-        path: "/special",
-        headers: {},
-      } as unknown as Request;
+    const result = await rateLimiter.calculateLimit(mockRequest as Request);
 
-      const [key, limit] = rateLimiter.calculateLimit(req);
+    expect(result).toEqual({
+      tooManyRequests: true,
+      retryAfter: 3,
+      ratelimit: 10,
+      remainingRequests: 0,
+      resetTime: expect.any(Number),
+    });
+  });
 
-      expect(key).toBe("limit:127.0.0.1:/special:false");
-      expect(limit).toBe(10); // unauthLimit (no override)
+  test('calculateLimit when requests exceed limit', async () => {
+    const mockRequest = createMockRequest('/api', '127.0.0.1', false);
+    mockRedisClient.incrExpireCalcSlidingLog.mockResolvedValue({ isNotAllowed: false, requests: 11, ttl: 3000 });
+
+    const result = await rateLimiter.calculateLimit(mockRequest as Request);
+
+    expect(result).toEqual({
+      tooManyRequests: true,
+      retryAfter: 3,
+      ratelimit: 10,
+      remainingRequests: 0,
+      resetTime: expect.any(Number),
     });
   });
 });
