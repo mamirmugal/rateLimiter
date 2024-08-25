@@ -1,10 +1,9 @@
-import express, { Application, ErrorRequestHandler } from 'express';
+import express, { Application } from 'express';
 import pino, { Logger } from 'pino';
 import { rateLimitConfig, PORT, REDIS_URI, ConfigManager } from './config';
 import { RateLimiterMiddleware } from './middleware';
 import router from './routers';
 import { RedisRateLimitService } from './services';
-import { Redis } from 'ioredis';
 
 const app: Application = express();
 const logger: Logger = pino();

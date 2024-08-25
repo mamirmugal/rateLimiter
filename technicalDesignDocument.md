@@ -94,7 +94,6 @@ This document outlines the technical design for implementing a rate limiting mid
 
 ## 5. Error Handling
 
-- Redis connection errors: Fail open (allow requests) and log errors
 - Configuration errors: Throw error during initialization
 - Override errors: Log and use default limits
 
@@ -121,9 +120,8 @@ This document outlines the technical design for implementing a rate limiting mid
 
 ## 7. Future Enhancements
 
-- Support for distributed rate limiting across multiple application instances
-- Integration with API gateway solutions
-- Saving rate limit in database
+- Redis connection errors: Fail open (allow requests) and log errors
+- Presist rate limit in database
 - Dynamic rate limit adjustments based on server load
 - User-specific rate limits
 
