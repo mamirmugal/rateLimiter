@@ -6,9 +6,9 @@ Expressjs poject written in Typescipt, which adds rate limiter to an api (middle
 **Note**
 - redis client should be installed on the system
 
-## Run the code
+## Run install and the code
 ```sh
-npm start
+npm install && npm start
 ```
 
 ### Curl command to call the api and a unauthenticated user
