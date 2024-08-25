@@ -1,8 +1,8 @@
 import moment from 'moment';
-import { RateLimitConfigInterface } from '../types';
+import { RateLimitConfigType } from '../types';
 import { convertToMs } from '../utils';
 
-export const defaultConfig: RateLimitConfigInterface = {
+export const rateLimitConfig: RateLimitConfigType = {
   ttl: convertToMs(1, 'hour'), // time to live for the request this is set to 1 hour
   unauthLimit: {
     limit: 100, // request allow with respect to ttl, here is 100 request in an hour

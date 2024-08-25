@@ -1,3 +1,3 @@
-import { RateLimiter } from './rateLimiter';
+import { RateLimiterMiddleware } from './rateLimiterMiddleware';
 
-export { RateLimiter };
+export { RateLimiterMiddleware };

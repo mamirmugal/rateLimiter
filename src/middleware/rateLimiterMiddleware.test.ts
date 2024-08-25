@@ -1,24 +1,25 @@
 import { Request } from 'express';
-import { RateLimiter } from '.';
 import { RedisRateLimitService } from '../services';
-import { RateLimitConfigInterface } from '../types';
+import { RateLimitConfigType } from '../types';
 import { convertToMs } from '../utils';
-import pino from 'pino';
+import { RateLimiterMiddleware } from './rateLimiterMiddleware';
+import { ConfigManager } from '../config';
 
 // Mock RedisRateLimitService
 jest.mock('../services/redisRateLimitService');
-jest.mock('pino', ()=> {
+jest.mock('pino', () => {
   return () => {
     return {
-      info: jest.fn()
-    }
-  }
+      info: jest.fn(),
+    };
+  };
 });
 
 describe('RateLimiter', () => {
-  let rateLimiter: RateLimiter;
+  let rateLimiter: RateLimiterMiddleware;
   let mockRedisRateLimitService: jest.Mocked<RedisRateLimitService>;
-  let mockConfig: RateLimitConfigInterface;
+  let mockConfig: RateLimitConfigType;
+  let mockConfigManager: ConfigManager;
 
   beforeEach(() => {
     mockRedisRateLimitService = new RedisRateLimitService('') as jest.Mocked<RedisRateLimitService>;
@@ -53,7 +54,8 @@ describe('RateLimiter', () => {
         },
       ],
     };
-    rateLimiter = new RateLimiter(mockRedisRateLimitService, mockConfig);
+    mockConfigManager = new ConfigManager(mockConfig);
+    rateLimiter = new RateLimiterMiddleware(mockRedisRateLimitService, mockConfigManager, mockConfig);
   });
 
   const createMockRequest = (path: string, ip: string, isAuthenticated: boolean): Partial<Request> => ({
@@ -62,7 +64,11 @@ describe('RateLimiter', () => {
     headers: isAuthenticated ? { authorization: 'Bearer token' } : {},
   });
 
-  test('evaluateRateLimit for unauthenticated user', async () => {
+  afterEach(() => {
+    jest.clearAllMocks(); // Clear mocks after each test
+  });
+
+  it('evaluateRateLimit for unauthenticated user', async () => {
     const mockRequest = createMockRequest('/api', '127.0.0.1', false);
     mockRedisRateLimitService.incrExpireCalcSlidingLog.mockResolvedValue({
       isNotAllowed: false,
@@ -81,7 +87,7 @@ describe('RateLimiter', () => {
     });
   });
 
-  test('evaluateRateLimit for authenticated user', async () => {
+  it('evaluateRateLimit for authenticated user', async () => {
     const mockRequest = createMockRequest('/api', '127.0.0.1', true);
     mockRedisRateLimitService.incrExpireCalcSlidingLog.mockResolvedValue({
       isNotAllowed: false,
@@ -100,7 +106,7 @@ describe('RateLimiter', () => {
     });
   });
 
-  test('evaluateRateLimit for override event', async () => {
+  it('evaluateRateLimit for override event', async () => {
     const mockRequest = createMockRequest('/special', '127.0.0.1', false);
     mockRedisRateLimitService.incrExpireCalcSlidingLog.mockResolvedValue({
       isNotAllowed: false,
@@ -119,7 +125,7 @@ describe('RateLimiter', () => {
     });
   });
 
-  test('evaluateRateLimit when too many requests', async () => {
+  it('evaluateRateLimit when too many requests', async () => {
     const mockRequest = createMockRequest('/api', '127.0.0.1', false);
     mockRedisRateLimitService.incrExpireCalcSlidingLog.mockResolvedValue({
       isNotAllowed: true,
@@ -138,7 +144,7 @@ describe('RateLimiter', () => {
     });
   });
 
-  test('evaluateRateLimit when requests exceed limit', async () => {
+  it('evaluateRateLimit when requests exceed limit', async () => {
     const mockRequest = createMockRequest('/api', '127.0.0.1', false);
     mockRedisRateLimitService.incrExpireCalcSlidingLog.mockResolvedValue({
       isNotAllowed: false,

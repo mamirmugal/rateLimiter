@@ -1,68 +1,52 @@
 import { NextFunction, Request, Response } from 'express';
 import pino, { Logger } from 'pino';
 import { RedisRateLimitService } from '../services';
-import { CustomRequest, EvaluateRateLimitResult, RateLimit, RateLimitConfigInterface } from '../types';
-import { OverriderEvent, RateLimitResult } from '../types/rateLimiterTypes';
+import { CustomRequest, EvaluateRateLimitResult, GetRateLimitReturnType, RateLimitConfigType } from '../types';
+import { RateLimitResult } from '../types';
+import { ConfigManager } from '../config';
 
-export class RateLimiter {
+export class RateLimiterMiddleware {
   private redisClient: RedisRateLimitService;
-  private config: RateLimitConfigInterface;
+  private config: RateLimitConfigType;
+  private configManager: ConfigManager;
   private logger: Logger;
 
-  constructor(redisClient: RedisRateLimitService, config: RateLimitConfigInterface) {
+  constructor(redisClient: RedisRateLimitService, configManager: ConfigManager, config: RateLimitConfigType) {
     this.redisClient = redisClient;
+    this.configManager = configManager;
     this.config = config;
     this.logger = pino();
   }
 
-  getOverrideEvent = (url: string): RateLimit | null => {
-    const currentTime: Date = new Date();
-
-    const event: OverriderEvent | undefined = this.config.override.find(
-      (event: OverriderEvent) => event.url === url && currentTime >= event.startTime && currentTime <= event.endTime
-    );
-
-    return event ? event.rateLimit : null;
-  };
-
-  evaluateRateLimit = async (req: CustomRequest): Promise<EvaluateRateLimitResult> => {
+  async evaluateRateLimit(req: CustomRequest): Promise<EvaluateRateLimitResult> {
     const ip: string | undefined = req.ip;
     const endpoint: string | undefined = req.path;
-    // setting up local variable
-    req.overrider = false;
 
     // basic auth check
     const isAuthenticated: boolean = req.headers['authorization'] !== undefined;
 
-    let ratelimit: RateLimit = this.config.unauthLimit;
-    // auth user
-    if (isAuthenticated) ratelimit = this.config.authLimit;
+    // getting the rate limit from the configManager
+    const limitObj: GetRateLimitReturnType = this.configManager.getRateLimit(endpoint, isAuthenticated);
 
-    // change to override event
-    const eventLimit: RateLimit | null = this.getOverrideEvent(endpoint);
-
-    if (eventLimit) {
-      req.overrider = true;
-      ratelimit = eventLimit;
-    }
+    // setting overrider in request
+    if (limitObj.isOverrideEvent) req.overrider = true;
 
     const key: string = `limit:${ip}:${endpoint}:${isAuthenticated}`;
 
     this.logger.info(`Unique key per IP: ${key}`);
-    this.logger.info(`Limit for this IP: ${ratelimit.limit}`);
+    this.logger.info(`Limit for this IP: ${limitObj.ratelimit.limit}`);
 
     const { isNotAllowed, requests, ttl }: RateLimitResult = await this.redisClient.incrExpireCalcSlidingLog(
       key,
       this.config.ttl,
-      ratelimit
+      limitObj.ratelimit
     );
 
     // boolean value to request not allowed
     // either by ratelimit or sliding log
-    const tooManyRequests: boolean = isNotAllowed || requests > ratelimit.limit;
-
+    const tooManyRequests: boolean = isNotAllowed || requests > limitObj.ratelimit.limit;
     // calculating remaining requests, which will be send back to the user
-    const remainingRequests: number = Math.max(0, ratelimit.limit - requests);
+    const remainingRequests: number = Math.max(0, limitObj.ratelimit.limit - requests);
     // calculate reset value, which will also be send back to the user
     const resetTime: number = Math.ceil(Date.now() / 1000 + ttl / 1000);
 
@@ -71,12 +55,13 @@ export class RateLimiter {
     return {
       tooManyRequests,
       retryAfter: Math.ceil(ttl / 1000),
-      ratelimit: ratelimit.limit,
+      ratelimit: limitObj.ratelimit.limit,
       remainingRequests,
       resetTime,
     };
-  };
+  }
 
+  // middle ware to use with express 
   middleware = async (req: Request, res: Response, next: NextFunction) => {
     this.logger.info(`Time:", ${new Date().toISOString()}`);
 

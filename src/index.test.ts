@@ -1,25 +1,27 @@
 import express from 'express';
 import request from 'supertest';
-import { RateLimiter } from './middleware';
 import { RedisRateLimitService } from './services';
-import { RateLimitConfigInterface } from './types';
+import { RateLimitConfigType } from './types';
 import { convertToMs } from './utils';
+import { RateLimiterMiddleware } from './middleware';
+import { ConfigManager } from './config';
 
 jest.mock('./services/redisRateLimitService');
-jest.mock('pino', ()=> {
+jest.mock('pino', () => {
   return () => {
     return {
       info: jest.fn(),
-      error: jest.fn()
-    }
-  }
+      error: jest.fn(),
+    };
+  };
 });
 
 describe('RateLimiter Middleware', () => {
   let app: express.Application;
-  let rateLimiter: RateLimiter;
+  let rateLimiter: RateLimiterMiddleware;
   let mockRedisRateLimitService: jest.Mocked<RedisRateLimitService>;
-  let mockConfig: RateLimitConfigInterface;
+  let mockConfig: RateLimitConfigType;
+  let mockConfigManager: ConfigManager;
 
   beforeEach(() => {
     app = express();
@@ -67,15 +69,20 @@ describe('RateLimiter Middleware', () => {
         },
       ],
     };
-    rateLimiter = new RateLimiter(mockRedisRateLimitService, mockConfig);
+    mockConfigManager = new ConfigManager(mockConfig);
+    rateLimiter = new RateLimiterMiddleware(mockRedisRateLimitService, mockConfigManager, mockConfig);
 
     app.use(rateLimiter.middleware);
-    app.get('/test', (req, res) => res.sendStatus(200));
-    app.get('/special', (req, res) => res.sendStatus(200));
-    app.get('/off-sale', (req, res) => res.sendStatus(200));
+    app.get('/test', (_, res) => res.sendStatus(200));
+    app.get('/special', (_, res) => res.sendStatus(200));
+    app.get('/off-sale', (_, res) => res.sendStatus(200));
   });
 
-  test('Should allow requests within rate limit', async () => {
+  afterEach(() => {
+    jest.clearAllMocks(); // Clear mocks after each test
+  });
+
+  it('Should allow requests within rate limit', async () => {
     mockRedisRateLimitService.incrExpireCalcSlidingLog.mockResolvedValue({
       isNotAllowed: false,
       requests: 5,
@@ -90,7 +97,7 @@ describe('RateLimiter Middleware', () => {
     expect(response.headers['x-ratelimit-reset']).toBeDefined();
   });
 
-  test('Should block requests exceeding rate limit', async () => {
+  it('Should block requests exceeding rate limit', async () => {
     mockRedisRateLimitService.incrExpireCalcSlidingLog.mockResolvedValue({
       isNotAllowed: true,
       requests: 11,
@@ -106,7 +113,7 @@ describe('RateLimiter Middleware', () => {
     });
   });
 
-  test('Should apply different limit for authenticated requests', async () => {
+  it('Should apply different limit for authenticated requests', async () => {
     mockRedisRateLimitService.incrExpireCalcSlidingLog.mockResolvedValue({
       isNotAllowed: false,
       requests: 15,
@@ -120,7 +127,7 @@ describe('RateLimiter Middleware', () => {
     expect(response.headers['x-ratelimit-remaining']).toBe('5');
   });
 
-  test('Should apply override limit for special route', async () => {
+  it('Should apply override limit for special route', async () => {
     mockRedisRateLimitService.incrExpireCalcSlidingLog.mockResolvedValue({
       isNotAllowed: false,
       requests: 3,
@@ -134,7 +141,7 @@ describe('RateLimiter Middleware', () => {
     expect(response.headers['x-ratelimit-remaining']).toBe('2');
   });
 
-  test('Should not apply override limit for special route, time is over', async () => {
+  it('Should not apply override limit for special route, time is over', async () => {
     mockRedisRateLimitService.incrExpireCalcSlidingLog.mockResolvedValue({
       isNotAllowed: false,
       requests: 3,
@@ -149,7 +156,7 @@ describe('RateLimiter Middleware', () => {
     expect(response.headers['x-ratelimit-remaining']).toBe('7');
   });
 
-  test('Should handle errors gracefully', async () => {
+  it('Should handle errors gracefully', async () => {
     mockRedisRateLimitService.incrExpireCalcSlidingLog.mockRejectedValue(new Error('Redis error'));
 
     const response = await request(app).get('/test');

@@ -1,16 +1,21 @@
-import express, { Application } from 'express';
+import express, { Application, ErrorRequestHandler } from 'express';
 import pino, { Logger } from 'pino';
-import { defaultConfig, PORT, REDIS_URI } from './config';
-import { RateLimiter } from './middleware';
+import { rateLimitConfig, PORT, REDIS_URI, ConfigManager } from './config';
+import { RateLimiterMiddleware } from './middleware';
 import router from './routers';
 import { RedisRateLimitService } from './services';
+import { Redis } from 'ioredis';
 
 const app: Application = express();
 const logger: Logger = pino();
 const port: number = PORT || 3002;
 
 // getting Rate limiter
-const rateLimiter: RateLimiter = new RateLimiter(new RedisRateLimitService(REDIS_URI), defaultConfig);
+const rateLimiter: RateLimiterMiddleware = new RateLimiterMiddleware(
+  new RedisRateLimitService(REDIS_URI),
+  new ConfigManager(rateLimitConfig),
+  rateLimitConfig
+);
 
 // middleware
 app.use(rateLimiter.middleware);

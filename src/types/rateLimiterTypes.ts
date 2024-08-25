@@ -13,12 +13,12 @@ export type OverriderEvent = {
   rateLimit: RateLimit;
 };
 
-export type RateLimitConfigInterface = {
+export type RateLimitConfigType = {
   ttl: number;
   authLimit: RateLimit;
   unauthLimit: RateLimit;
   override: OverriderEvent[];
-}
+};
 
 export type RateLimitResult = {
   isNotAllowed: boolean;
