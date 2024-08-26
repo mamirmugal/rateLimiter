@@ -12,23 +12,23 @@ export class RedisRateLimitService {
       maxRetriesPerRequest: 2, // Disable automatic retries
       lazyConnect: true, // Connect on first command
     });
-  
+
     // Listen for connection errors
     redisClient.on('error', (error) => {
       // logger.error(`Redis connection error: ${error.message}`);
       // Handle the error as needed (e.g., fallback logic, alerting, etc.)
-      throw new Error("Connection lost!!")
+      throw new Error('Connection lost!!');
     });
-  
-    this.client =  redisClient;
+
+    this.client = redisClient;
   }
 
   // removing specific key from redis
   async removeKey(key: string): Promise<void> {
     await this.client.del(key);
-  };
+  }
 
-  async incrExpireCalcSlidingLog (key: string, configTtl: number, ratelimit: RateLimit): Promise<RateLimitResult> {
+  async incrExpireCalcSlidingLog(key: string, configTtl: number, ratelimit: RateLimit): Promise<RateLimitResult> {
     // this.removeKey(key)
 
     // increment and retuen time to live
@@ -43,12 +43,12 @@ export class RedisRateLimitService {
     );
 
     return { isNotAllowed, requests, ttl };
-  };
+  }
 
   // incrementing the key and also adding and expire time to it
   // and returning back the total count of the key
   // and time to live and milliseconds
-  async incrAndExpire (key: string, windowMs: number): Promise<[number, number]> {
+  async incrAndExpire(key: string, windowMs: number): Promise<[number, number]> {
     const multi: ChainableCommander = this.client.multi();
     multi.incr(key);
     multi.pttl(key);
@@ -67,10 +67,10 @@ export class RedisRateLimitService {
     }
 
     return [count, ttl];
-  };
+  }
 
   // sliding log allowed or not
-  async isSlidingWindowLimitExceeded (key: string, windowSizeMs: number, maxRequests: number): Promise<boolean> {
+  async isSlidingWindowLimitExceeded(key: string, windowSizeMs: number, maxRequests: number): Promise<boolean> {
     const now: number = Date.now();
 
     const windowStart: number = now - windowSizeMs;
@@ -101,5 +101,5 @@ export class RedisRateLimitService {
     const count: number = results[1][1] as number;
 
     return count > maxRequests;
-  };
+  }
 }

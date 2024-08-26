@@ -1,9 +1,10 @@
 import { Request } from 'express';
 import { RedisRateLimitService } from '../services';
-import { RateLimitConfigType } from '../types';
+import { CustomRequest, RateLimitConfigType } from '../types';
 import { convertToMs } from '../utils';
 import { RateLimiterMiddleware } from './rateLimiterMiddleware';
 import { ConfigManager } from '../config';
+import pino, { Logger } from 'pino';
 
 // Mock RedisRateLimitService
 jest.mock('../services/redisRateLimitService');
@@ -20,6 +21,7 @@ describe('RateLimiter', () => {
   let mockRedisRateLimitService: jest.Mocked<RedisRateLimitService>;
   let mockConfig: RateLimitConfigType;
   let mockConfigManager: ConfigManager;
+  let mockLogger: jest.Mocked<Logger>;
 
   beforeEach(() => {
     mockRedisRateLimitService = new RedisRateLimitService('') as jest.Mocked<RedisRateLimitService>;
@@ -55,7 +57,8 @@ describe('RateLimiter', () => {
       ],
     };
     mockConfigManager = new ConfigManager(mockConfig);
-    rateLimiter = new RateLimiterMiddleware(mockRedisRateLimitService, mockConfigManager, mockConfig);
+    mockLogger = pino() as jest.Mocked<Logger>;
+    rateLimiter = new RateLimiterMiddleware(mockRedisRateLimitService, mockConfigManager, mockConfig, mockLogger);
   });
 
   const createMockRequest = (path: string, ip: string, isAuthenticated: boolean): Partial<Request> => ({
@@ -66,6 +69,11 @@ describe('RateLimiter', () => {
 
   afterEach(() => {
     jest.clearAllMocks(); // Clear mocks after each test
+  });
+
+  it('should throw an error if IP or endpoint is missing', async () => {
+    const mockRequest = {} as CustomRequest;
+    await expect(rateLimiter.evaluateRateLimit(mockRequest)).rejects.toThrow('Invalid request: IP or endpoint is missing');
   });
 
   it('evaluateRateLimit for unauthenticated user', async () => {

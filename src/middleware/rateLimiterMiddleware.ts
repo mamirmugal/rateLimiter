@@ -1,26 +1,34 @@
-import { NextFunction, Request, Response } from 'express';
-import pino, { Logger } from 'pino';
-import { RedisRateLimitService } from '../services';
 import { CustomRequest, EvaluateRateLimitResult, GetRateLimitReturnType, RateLimitConfigType } from '../types';
+import { RedisRateLimitService } from '../services';
+import { NextFunction, Response } from 'express';
 import { RateLimitResult } from '../types';
 import { ConfigManager } from '../config';
+import { Logger } from 'pino';
 
 export class RateLimiterMiddleware {
   private redisClient: RedisRateLimitService;
   private config: RateLimitConfigType;
   private configManager: ConfigManager;
   private logger: Logger;
+  private readonly TOO_MANY_REQUESTS_STATUS = 429;
 
-  constructor(redisClient: RedisRateLimitService, configManager: ConfigManager, config: RateLimitConfigType) {
+  constructor(
+    redisClient: RedisRateLimitService,
+    configManager: ConfigManager,
+    config: RateLimitConfigType,
+    logger: Logger
+  ) {
     this.redisClient = redisClient;
     this.configManager = configManager;
     this.config = config;
-    this.logger = pino();
+    this.logger = logger;
   }
 
   async evaluateRateLimit(req: CustomRequest): Promise<EvaluateRateLimitResult> {
     const ip: string | undefined = req.ip;
     const endpoint: string | undefined = req.path;
+
+    if (!ip || !endpoint) throw new Error('Invalid request: IP or endpoint is missing');
 
     // basic auth check
     const isAuthenticated: boolean = req.headers['authorization'] !== undefined;
@@ -61,10 +69,15 @@ export class RateLimiterMiddleware {
     };
   }
 
-  // middle ware to use with express 
-  middleware = async (req: Request, res: Response, next: NextFunction) => {
-    this.logger.info(`Time:", ${new Date().toISOString()}`);
+  // adding response headers
+  private setRateLimitHeaders(res: Response, ratelimit: number, remainingRequests: number, resetTime: number) {
+    res.setHeader('X-RateLimit-Limit', ratelimit);
+    res.setHeader('X-RateLimit-Remaining', remainingRequests);
+    res.setHeader('X-RateLimit-Reset', resetTime);
+  }
 
+  // middleware to use with express
+  middleware = async (req: CustomRequest, res: Response, next: NextFunction) => {
     try {
       // getting the key for redis and
       // limit allowed for the user
@@ -72,16 +85,14 @@ export class RateLimiterMiddleware {
         await this.evaluateRateLimit(req);
 
       if (tooManyRequests) {
-        return res.status(429).json({
+        return res.status(this.TOO_MANY_REQUESTS_STATUS).json({
           error: 'Too Many Requests',
           retryAfter: retryAfter,
         });
       }
 
-      // adding required headers
-      res.setHeader('X-RateLimit-Limit', ratelimit);
-      res.setHeader('X-RateLimit-Remaining', remainingRequests);
-      res.setHeader('X-RateLimit-Reset', resetTime);
+      // Then in the middleware method:
+      this.setRateLimitHeaders(res, ratelimit, remainingRequests, resetTime);
 
       next();
     } catch (error) {

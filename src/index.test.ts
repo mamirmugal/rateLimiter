@@ -5,6 +5,7 @@ import { RateLimitConfigType } from './types';
 import { convertToMs } from './utils';
 import { RateLimiterMiddleware } from './middleware';
 import { ConfigManager } from './config';
+import pino, { Logger } from 'pino';
 
 jest.mock('./services/redisRateLimitService');
 jest.mock('pino', () => {
@@ -22,6 +23,7 @@ describe('RateLimiter Middleware', () => {
   let mockRedisRateLimitService: jest.Mocked<RedisRateLimitService>;
   let mockConfig: RateLimitConfigType;
   let mockConfigManager: ConfigManager;
+  let mockLogger: jest.Mocked<Logger>;
 
   beforeEach(() => {
     app = express();
@@ -70,7 +72,8 @@ describe('RateLimiter Middleware', () => {
       ],
     };
     mockConfigManager = new ConfigManager(mockConfig);
-    rateLimiter = new RateLimiterMiddleware(mockRedisRateLimitService, mockConfigManager, mockConfig);
+    mockLogger = pino() as jest.Mocked<Logger>;
+    rateLimiter = new RateLimiterMiddleware(mockRedisRateLimitService, mockConfigManager, mockConfig, mockLogger);
 
     app.use(rateLimiter.middleware);
     app.get('/test', (_, res) => res.sendStatus(200));

@@ -1,4 +1,4 @@
-import { RateLimit } from "./rateLimiterTypes";
+import { RateLimit } from './rateLimiterTypes';
 
 export type GetRateLimitReturnType = {
   isOverrideEvent: boolean;

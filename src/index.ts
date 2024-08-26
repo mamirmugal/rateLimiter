@@ -13,7 +13,8 @@ const port: number = PORT || 3002;
 const rateLimiter: RateLimiterMiddleware = new RateLimiterMiddleware(
   new RedisRateLimitService(REDIS_URI),
   new ConfigManager(rateLimitConfig),
-  rateLimitConfig
+  rateLimitConfig,
+  logger
 );
 
 // middleware
