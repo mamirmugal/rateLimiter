@@ -3,6 +3,19 @@
 ## Objective
 Express.js project written in TypeScript, which adds a rate limiter to an API (middleware), using Redis to keep track of API request counts.
 
+## Technical Design Document
+🔍 **[View Full Technical Design Document](https://github.com/mamirmugal/rateLimiter/blob/main/technicalDesignDocument.md)**
+
+This project is built based on a comprehensive Technical Design Document. The document includes detailed information about:
+
+- System Architecture
+- Detailed Component Design
+- Data Flow
+- Error Handling
+- Testing Strategy
+- Deployment Considerations
+- Future Enhancements
+
 **Note**
 - Redis should be installed and running on the system
 
