@@ -24,18 +24,16 @@ This document outlines the technical design for implementing a rate limiting mid
 
 ## 3. Detailed Component Design
 
-
 ### 3.1 RateLimiter Middleware
 
 #### 3.1.1 Purpose
 `RateLimiterMiddleware` class to intercept incoming requests, check against rate limits, and either allow the request or return a 429 error.
 
 #### 3.1.2 Key Functions
-- `middleware (req: Request, res: Response, next: NextFunction)` 
-  - a middleware function to intercept incoming calls and return apporiate response
-- `evaluateRateLimit (req: CustomRequest): Promise<EvaluateRateLimitResult>` 
-  - method to encapsulate the ratelimiting logic by using redis
-
+- `middleware(req: Request, res: Response, next: NextFunction)` 
+  - A middleware function to intercept incoming calls and return appropriate response
+- `evaluateRateLimit(req: CustomRequest): Promise<EvaluateRateLimitResult>` 
+  - Method to encapsulate the rate limiting logic by using Redis
 
 ### 3.2 Redis Client Wrapper
 
@@ -44,12 +42,11 @@ This document outlines the technical design for implementing a rate limiting mid
 
 #### 3.2.2 Key Functions
 - `incrAndExpire(key: string, windowMs: number): Promise<[number, number]>` 
-  - function to add and key, increment it and add expiry to it
+  - Function to add a key, increment it, and add expiry to it
 - `removeKey(key: string): Promise<void>`
-  - removing key from redis
+  - Removing key from Redis
 - `incrExpireCalcSlidingLog(key: string, configTtl: number, ratelimit: RateLimit): Promise<RateLimitResult>`
-  - encapsulating both `incrAndExpire` and `isSlidingWindowLimitExceeded`
-
+  - Encapsulating both `incrAndExpire` and `isSlidingWindowLimitExceeded`
 
 ### 3.3 Configuration Manager
 
@@ -57,9 +54,8 @@ This document outlines the technical design for implementing a rate limiting mid
 `ConfigManager` class to manage and provide access to rate limiting configuration options.
 
 #### 3.3.2 Key Functions
-- `getRateLimit = (endpoint: string, isAuthenticated: boolean): GetRateLimitReturnType`
-  - method to get calculate the rate method
-
+- `getRateLimit(endpoint: string, isAuthenticated: boolean): GetRateLimitReturnType`
+  - Method to calculate the rate limit
 
 ### 3.4 Sliding Log Algorithm (Bonus)
 
@@ -68,8 +64,7 @@ This document outlines the technical design for implementing a rate limiting mid
 
 #### 3.4.2 Key Functions
 - `isSlidingWindowLimitExceeded(key: string, windowSizeMs: number, maxRequests: number): Promise<boolean>`
-  - function to cauculate slinding window and determine if the requests has exceeded the specified window
-
+  - Function to calculate sliding window and determine if the requests have exceeded the specified window
 
 ### 3.5 Override Manager (Bonus)
 
@@ -77,9 +72,8 @@ This document outlines the technical design for implementing a rate limiting mid
 `ConfigManager` class to manage temporary rate limit overrides based on specific criteria.
 
 #### 3.5.2 Key Functions
-- `private getOverrideEvent = (url: string): RateLimit | null`
-  - private method to get override events
-
+- `private getOverrideEvent(url: string): RateLimit | null`
+  - Private method to get override events
 
 ## 4. Data Flow
 
@@ -111,21 +105,22 @@ This document outlines the technical design for implementing a rate limiting mid
 - Sliding log algorithm functionality (Bonus)
 - Override functionality (Bonus)
 
-## 6. Deployment Considerations
+## 7. Deployment Considerations
 
 - Redis connection string should be configurable via environment variables
 - Consider using Redis cluster for high-availability setups
 - Implement proper logging for monitoring and debugging
 - Use TypeScript compilation as part of the build process
 
-## 7. Future Enhancements
+## 8. Future Enhancements
 
 - Redis connection errors: Fail open (allow requests) and log errors
-- Presist rate limit in database
+- Persist rate limit in database
 - Dynamic rate limit adjustments based on server load
 - User-specific rate limits
 - Adding more validation to config manager
+- Improving test run time
 
-## 8. Conclusion
+## 9. Conclusion
 
 This technical design provides a robust framework for implementing rate limiting in an Express.js application. It offers flexibility through configuration options, efficiency through Redis usage, and extensibility through the bonus features of sliding log algorithm and temporary overrides.

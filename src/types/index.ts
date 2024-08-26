@@ -1,6 +1,6 @@
-import { RateLimit, RateLimitConfigType, RateLimitResult } from './rateLimiterTypes';
+import { RateLimit, RateLimitConfigType, RateLimitResult, EvaluateRateLimitResult } from './rateLimiterTypes';
 import { ChainableCommanderReturnType } from './redisTypes';
-import { CustomRequest, EvaluateRateLimitResult, TTL_UNIT_TYPE } from './types';
+import { CustomRequest, TTL_UNIT_TYPE } from './types';
 import { GetRateLimitReturnType } from './configManagerTypes';
 
 export {

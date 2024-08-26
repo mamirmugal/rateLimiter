@@ -25,3 +25,11 @@ export type RateLimitResult = {
   requests: number;
   ttl: number;
 };
+
+export type EvaluateRateLimitResult = {
+  tooManyRequests: boolean;
+  retryAfter: number;
+  ratelimit: number;
+  remainingRequests: number;
+  resetTime: number;
+};

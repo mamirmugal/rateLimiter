@@ -9,20 +9,42 @@ const app: Application = express();
 const logger: Logger = pino();
 const port: number = PORT || 3002;
 
-// getting Rate limiter
+// Initialize Redis service
+const redisService = new RedisRateLimitService(REDIS_URI);
+
+// Initialize Config Manager
+const configManager = new ConfigManager(rateLimitConfig);
+
+// Initialize Rate Limiter Middleware
 const rateLimiter: RateLimiterMiddleware = new RateLimiterMiddleware(
-  new RedisRateLimitService(REDIS_URI),
-  new ConfigManager(rateLimitConfig),
+  redisService,
+  configManager,
   rateLimitConfig,
   logger
 );
 
-// middleware
+// Apply middleware
 app.use(rateLimiter.middleware);
 
-// router
+// Apply router
 app.use(router);
 
+// Error handling middleware
+app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  logger.error(err);
+  res.status(500).json({ error: 'Internal Server Error' });
+});
+
+// Start the server
 app.listen(port, () => {
-  logger.info(`Example app listening on port ${port}`);
+  logger.info(`Server is running on port ${port}`);
+}).on('error', (err: Error) => {
+  logger.error(`Failed to start server: ${err.message}`);
+  process.exit(1);
+});
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason: any, promise: Promise<any>) => {
+  logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  // Application specific logging, throwing an error, or other logic here
 });

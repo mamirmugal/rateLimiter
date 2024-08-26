@@ -4,13 +4,14 @@ import { CustomRequest } from './types';
 const router: Router = express.Router();
 
 router.get('/', (req: Request, res: Response): void => {
-  const isAuthenticated: boolean = req.headers['authorization'] !== undefined;
+  const isAuthenticated: boolean = req.headers.authorization !== undefined;
   const returnString: string = isAuthenticated ? 'Public for Auth' : 'Public for unauth';
   res.send(returnString);
 });
 
-router.get('/sale', (req: CustomRequest, res: Response): void => {
-  const returnString: string = req?.overrider ? 'Sale!!!' : 'Sale over :(';
+router.get('/sale', (req: Request, res: Response): void => {
+  const customReq = req as CustomRequest;
+  const returnString: string = customReq.overrider ? 'Sale!!!' : 'Sale over :(';
   res.send(returnString);
 });
 

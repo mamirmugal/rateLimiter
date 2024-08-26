@@ -22,8 +22,8 @@ export const rateLimitConfig: RateLimitConfigType = {
   override: [
     {
       url: '/sale', // special event path
-      startTime: moment('25/08/2024, 17:05', 'DD/MM/YYYY, HH:mm').toDate(), // when the event starts
-      endTime: moment('25/08/2024, 17:35', 'DD/MM/YYYY, HH:mm').toDate(), // when the event ends
+      startTime: moment('26/08/2024, 10:05', 'DD/MM/YYYY, HH:mm').toDate(), // when the event starts
+      endTime: moment('26/08/2024, 13:35', 'DD/MM/YYYY, HH:mm').toDate(), // when the event ends
       rateLimit: {
         // rate limit for the sale event
         limit: 400, // Increased limit during the sale

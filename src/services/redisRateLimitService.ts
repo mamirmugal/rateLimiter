@@ -1,22 +1,18 @@
 import Redis, { ChainableCommander } from 'ioredis';
 import { ChainableCommanderReturnType, RateLimit, RateLimitResult } from '../types';
+import { MAX_RETRIES_PER_REQUEST } from '../config/config';
 
 export class RedisRateLimitService {
   private client: Redis;
 
   constructor(redisUrl: string) {
-    // this.client = new Redis(redisUrl, { maxRetriesPerRequest: 3 });
-
     const redisClient = new Redis(redisUrl, {
-      // Optional: Customize your Redis connection options
-      maxRetriesPerRequest: 2, // Disable automatic retries
+      maxRetriesPerRequest: MAX_RETRIES_PER_REQUEST, // Disable automatic retries
       lazyConnect: true, // Connect on first command
     });
 
     // Listen for connection errors
     redisClient.on('error', (error) => {
-      // logger.error(`Redis connection error: ${error.message}`);
-      // Handle the error as needed (e.g., fallback logic, alerting, etc.)
       throw new Error('Connection lost!!');
     });
 
