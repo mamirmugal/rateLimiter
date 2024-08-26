@@ -41,9 +41,7 @@ export class ConfigManager {
   getRateLimit(endpoint: string, isAuthenticated: boolean): GetRateLimitReturnType {
     let isOverrideEvent = false;
 
-    let ratelimit: RateLimit = this.options.unauthLimit;
-    // auth user
-    if (isAuthenticated) ratelimit = this.options.authLimit;
+    let ratelimit: RateLimit = isAuthenticated ? this.options.authLimit : this.options.unauthLimit;
 
     // change to override event
     const eventLimit: RateLimit | null = this.getOverrideEvent(endpoint);

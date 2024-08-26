@@ -124,6 +124,7 @@ This document outlines the technical design for implementing a rate limiting mid
 - Presist rate limit in database
 - Dynamic rate limit adjustments based on server load
 - User-specific rate limits
+- Adding more validation to config manager
 
 ## 8. Conclusion
 

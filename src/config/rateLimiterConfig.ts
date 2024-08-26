@@ -16,7 +16,7 @@ export const rateLimitConfig: RateLimitConfigType = {
     limit: 200,
     slidingLog: {
       windowSize: convertToMs(1, 'min'),
-      maxRequests: 5,
+      maxRequests:20,
     },
   },
   override: [
